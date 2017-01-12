@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+
+RED=31
+GREEN=32
+
+COLOR_ENABLED=1
+PRINT_STATUS=
+
+function help() {
+  echo "This script finds and lists all Git repositories with uncommitted changes."
+  echo
+  echo "Usage:"
+  echo "  list-git-repos-with-changes [OPTION]... [DIR]"
+  echo
+  echo "Options:"
+  echo "  --no-color     disable colors"
+  echo "  -s, --status   show the output of \`git status\` for repositories with uncommitted changes"
+  echo "  -h, --help     show this help, then exit"
+  exit 0
+}
+
+function color() {
+  if [ -z "$COLOR_ENABLED" ]; then
+    shift
+    echo -n "$@"
+  else
+    COLOR="$1"
+    shift
+    echo -en "\033[${COLOR}m$@\033[0m"
+  fi
+}
+
+while [[ $# -gt 0 ]]; do
+  ARG="$1"
+
+  case $ARG in
+    -h|--help)
+      help
+      exit
+      ;;
+    --no-color)
+      COLOR_ENABLED=
+      ;;
+    -s|--status)
+      PRINT_STATUS=1
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      break
+      ;;
+  esac
+
+  shift
+done
+
+DIR="$1"
+if [ -z "$DIR" ]; then
+  DIR="$(pwd)"
+fi
+
+function check_repo() {
+
+  GIT_DIR="$1"
+  REPO=$(dirname "$GIT_DIR")
+
+  if [ "${REPO:0:${#PWD}}" == "$PWD" ] && [ "$REPO" != "$PWD" ]; then
+    START=$( expr ${#PWD} + 1 )
+    REPO="${REPO:$START}"
+  fi
+
+  echo -n "${REPO}"
+
+  CHANGES=""
+
+  cd "$REPO"
+
+  UNSTAGED=$( git diff-files --ignore-submodules | wc -l | tr -d '[:space:]' )
+  if [ "$UNSTAGED" -gt 0 ]; then
+    CHANGES="$CHANGES $( color $RED "$UNSTAGED unstaged" )"
+  fi
+
+  UNCOMMITTED=0
+  if `git rev-parse --verify HEAD &>/dev/null`; then
+    UNCOMMITTED=$( git diff-index --cached HEAD --ignore-submodules | wc -l | tr -d '[:space:]' )
+  fi
+
+  if [ "$UNCOMMITTED" -gt 0 ]; then
+    CHANGES="$CHANGES $(color $RED "$UNCOMMITTED uncommitted" )"
+  fi
+
+  UNTRACKED=$( git ls-files --others --exclude-standard | wc -l | tr -d '[:space:]' )
+  if [ "$UNTRACKED" -gt 0 ]; then
+    CHANGES="$CHANGES $(color $RED "$UNTRACKED untracked" )"
+  fi
+
+  STASHED=$( git stash list | wc -l | tr -d '[:space:]' )
+  if [ "$STASHED" -gt 0 ]; then
+    CHANGES="$CHANGES $(color $RED "$STASHED stashed" )"
+  fi
+
+  OLD_IFS="$IFS"
+  IFS=$'\n'
+  for DATA in $( git for-each-ref --format="%(refname:short) %(upstream:short)" refs/heads ); do
+
+    OLD_IFS_2="$IFS"
+    IFS="$OLD_IFS"
+    read LOCAL REMOTE <<< "$DATA"
+
+    if [ -z "$REMOTE" ] || ! git rev-parse --verify "$REMOTE" &>/dev/null; then
+      NOT_MERGED=1
+      for BRANCH in $( git for-each-ref --format="%(refname:short)" ); do
+        if [ "$BRANCH" != "$LOCAL" ]; then
+          LAST_COMMIT=$( git rev-parse --verify "$LOCAL" )
+          MERGE_BASE=$( git merge-base "$LOCAL" "$BRANCH" )
+          if [ "$LAST_COMMIT" == "$MERGE_BASE" ]; then
+            NOT_MERGED=
+            break
+          fi
+        fi
+      done
+
+      if [ -n "$NOT_MERGED" ]; then
+        CHANGES="$CHANGES $(color $RED "$LOCAL has no upstream" )"
+      fi
+    else
+      AHEAD=$(git rev-list --left-only ${LOCAL}...${REMOTE} | wc -l | tr -d '[:space:]')
+      if [ "$AHEAD" -gt 0 ]; then
+        CHANGES="$CHANGES $(color $RED "$LOCAL ↑${AHEAD}" )"
+      fi
+    fi
+
+    IFS="$OLD_IFS_2"
+  done
+  IFS="$OLD_IFS"
+
+  if [ -z "$CHANGES" ]; then
+    echo $( color $GREEN " nothing to report" )
+  else
+    echo "$CHANGES"
+  fi
+
+  if [ -n "$PRINT_STATUS" ]; then
+    echo
+    if [ -n "$CHANGES" ]; then
+      git status
+      echo
+    fi
+  fi
+}
+
+export -f color
+export -f check_repo
+export RED="$RED"
+export GREEN="$GREEN"
+export COLOR_ENABLED="$COLOR_ENABLED"
+export PRINT_STATUS="$PRINT_STATUS"
+
+find "$DIR" -name .git -type d -exec bash -c 'check_repo "$0"' {} \;
