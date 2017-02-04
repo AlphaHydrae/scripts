@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -e
+
+BOLD=1
+COLOR_ENABLED=1
+
+echo
+echo "Creating temporary directory..."
+
+dir="$PWD"
+tmp_dir="$(mktemp -d -t git-ignore-list.XXX)"
+
+function cleanup {
+  echo "Cleaning up..."
+  rm -fr "$tmp_dir"
+  echo
+}
+
+trap cleanup EXIT
+
+function save_ignores() {
+  file="$1"
+  for git_ignore_line in $(cat "$file"|grep -v -e '^#'|sed '/^ *$/d'); do
+    echo -e "$git_ignore_line\t$file" >> "$tmp_dir/data.txt"
+  done
+}
+
+function color() {
+  if [ -z "$COLOR_ENABLED" ]; then
+    shift
+    echo -n "$@"
+  else
+    COLOR="$1"
+    shift
+    echo -en "\033[${COLOR}m$@\033[0m"
+  fi
+}
+
+export -f save_ignores
+export dir="$dir"
+export tmp_dir="$tmp_dir"
+
+echo "Finding .gitignore files..."
+find "$dir" -name ".gitignore" -not -path "*/bower_components/*" -not -path "*/vendor/*" -not -path "*/node_modules/*" -not -path "*/modules/*" -not -path "*/platforms/*" -not -path "*/plugins/*" -not -path "*/laravel/*" -exec bash -c 'save_ignores "$0"' {} \;
+
+old_ifs="$IFS"
+IFS=$'\n'
+
+previous_ignore_line=
+
+for line in $(cat "$tmp_dir/data.txt"|sort); do
+
+  old_ifs_2="$IFS"
+  IFS=$'\t'
+  read ignore_line file <<< "$(echo "$line")"
+
+  if [ "$ignore_line" != "$previous_ignore_line" ]; then
+    echo
+    echo "$( color $BOLD $ignore_line )"
+    previous_ignore_line="$ignore_line"
+  fi
+
+  echo "$file"
+
+  IFS="$old_ifs_2"
+done
+
+echo
+
+IFS="$old_ifs"
