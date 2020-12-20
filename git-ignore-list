@@ -20,9 +20,17 @@ trap cleanup EXIT
 
 function save_ignores() {
   file="$1"
+
+  OLD_IFS="$IFS"
+  IFS=$'\n'
   for git_ignore_line in $(cat "$file"|grep -v -e '^#'|sed '/^ *$/d'); do
+    IFS="$OLD_IFS"
+
     echo -e "$git_ignore_line\t$file" >> "$tmp_dir/data.txt"
+
+    IFS=$'\n'
   done
+  IFS="$OLD_IFS"
 }
 
 function color() {
