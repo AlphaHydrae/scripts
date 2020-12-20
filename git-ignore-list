@@ -26,6 +26,9 @@ function save_ignores() {
   for git_ignore_line in $(cat "$file"|grep -v -e '^#'|sed '/^ *$/d'); do
     IFS="$OLD_IFS"
 
+    # Ignore negations.
+    [[ "$git_ignore_line" =~ ^! ]] && continue
+
     echo -e "$git_ignore_line\t$file" >> "$tmp_dir/data.txt"
 
     IFS=$'\n'
