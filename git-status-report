@@ -84,7 +84,7 @@ function check_repo() {
 
   UNCOMMITTED=0
   if `git rev-parse --verify HEAD &>/dev/null`; then
-    UNCOMMITTED=$( git diff-index --cached HEAD --ignore-submodules | wc -l | tr -d '[:space:]' )
+    UNCOMMITTED=$( git diff-index --cached HEAD --ignore-submodules -- | wc -l | tr -d '[:space:]' )
   fi
 
   if [ "$UNCOMMITTED" -gt 0 ]; then
