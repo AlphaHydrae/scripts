@@ -41,7 +41,15 @@ export dir="$dir"
 export tmp_dir="$tmp_dir"
 
 echo "Finding .gitignore files..."
-find "$dir" -name ".gitignore" -not -path "*/bower_components/*" -not -path "*/vendor/*" -not -path "*/node_modules/*" -not -path "*/modules/*" -not -path "*/platforms/*" -not -path "*/plugins/*" -not -path "*/laravel/*" -exec bash -c 'save_ignores "$0"' {} \;
+find "$dir" -name ".gitignore" \
+  -not -path "*/bower_components/*" \
+  -not -path "*/vendor/*" \
+  -not -path "*/node_modules/*" \
+  -not -path "*/modules/*" \
+  -not -path "*/platforms/*" \
+  -not -path "*/plugins/*" \
+  -not -path "*/laravel/*" \
+  -exec bash -c 'save_ignores "$0"' {} \;
 
 old_ifs="$IFS"
 IFS=$'\n'
